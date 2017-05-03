@@ -27,13 +27,14 @@ link s t
     | otherwise        = undefined
 
 
+-- | Rank of the inserted tree must be <= rank of the Heap!
 insertTree :: Ord a => Tree a -> Heap a -> Heap a
 insertTree s = \case
     Heap [] -> Heap [s]
     Heap (t : ts)
         | rank s <  rank t -> Heap (s : t : ts)
         | rank s == rank t -> insertTree (link s t) (Heap ts)
-        | otherwise       -> undefined -- 
+        | otherwise        -> undefined
 
 insert :: Ord a => a -> Heap a -> Heap a
 insert a = insertTree (Node 0 a [])
