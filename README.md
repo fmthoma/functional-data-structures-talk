@@ -133,6 +133,9 @@ Account three credits for inserting element `m` into a list of length `N`:
 ┌───┬───┬───┬───┬───┬───┬───┬───┐
 │ 1*│ 2*│ 3*│ 4*│ 5*│ 6*│ 7*│ 8*│
 └───┴───┴───┴───┴───┴───┴───┴───┘
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ 1*│ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9*│   │   │   │   │   │   │   │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
 When reaching the size limit, we have exactly one credit per cell to be copied.
@@ -148,14 +151,17 @@ insert.
 data Queue a = Queue ![a] ![a]
 
 check :: Queue a -> Queue a
-check (Queue xs []) = Queue [] (reverse xs)
-check queue         = queue
+check (Queue write []) = Queue [] (reverse write)
+check queue            = queue
+
+empty :: Queue a
+empty = Queue [] []
 
 insert :: a -> Queue a -> Queue a
-insert x (Queue xs ys) = check (Queue (x : xs) ys)
+insert a (Queue write read) = check (Queue (a : write) read)
 
 view :: Queue a -> (a, Queue a)
-view (Queue xs (y : ys)) = (y, check (Queue xs ys))
+view (Queue write (a : read')) = (a, check (Queue write read'))
 ```
 
 Inserting an element always takes `O(1)`, but reversing the front end of the
@@ -168,6 +174,27 @@ Can we do better?
 ### Amortization for Batched Queue
 
 Use the Banker's method:
+
+```
+                                                    ┌───┐
+insert 1:       []                                  │ 1 ├───[]
+                                                    └───┘
+                ┌───┐                               ┌───┐
+insert 2:       │ 2*├───[]                          │ 1 ├───[]
+                └───┘                               └───┘
+                ┌───┐ ┌───┐                         ┌───┐
+insert 3:       │ 3*├─│ 2*├───[]                    │ 1 ├───[]
+                └───┘ └───┘                         └───┘
+                                                    ┌───┐ ┌───┐
+view:           []                                  │ 2 ├─│ 3 ├───[]
+                                                    └───┘ └───┘
+                ┌───┐                               ┌───┐ ┌───┐
+insert 4:       │ 4*├───[]                          │ 2 ├─│ 3 ├───[]
+                └───┘                               └───┘ └───┘
+                ┌───┐                               ┌───┐
+view:           │ 4*├───[]                          │ 3 ├───[]
+                └───┘                               └───┘
+```
 
 * On `insert`, account one credit to each inserted item, to a total cost of 2.
 * `view` without reversing does not consume any credits, so the total cost is 1.
@@ -201,11 +228,154 @@ the credits have already been spent!
 
 ### Laziness and Amortization
 
-                                  
-## Data Structures
+Idea: Use lazy evaluation, in particular memoization, to guarantee credits are
+only spent once.
 
-### Banker's Queue
+Lazy amortization using the Banker's method is a *layaway plan*:
 
-### Binary Heap
+* Each time a thunk is created, we assign it a number of credits proportional to
+  the time it takes to evaluate it.
+* We commit to save credits on each subsequent operation to pay for the
+  evaluation.
+* Goal is to prove that in each possible future, there are enough saved credits
+  to pay for the thunk when it is evaluated.
+
+
+### Example: Banker's Queue
+
+```haskell
+data Queue a = Queue
+    { lenWrite :: !Int
+    , write    :: [a]
+    , lenRead  :: !Int
+    , read     :: [a] }
+
+check :: Queue a -> Queue a
+check queue@(Queue {..})
+    | lenWrite > lenRead = Queue 0 [] (lenRead + lenWrite) (read ++ reverse write))
+    | otherwise          = queue
+
+empty :: Queue a
+empty = Queue 0 [] 0 []
+
+insert :: a -> Queue a -> Queue a
+insert a (Queue {..}) = check (Queue (lenWrite + 1) (a : write) lenRead read)
+
+
+view :: Queue a -> (a, Queue a)
+view (Queue {..}) = case read of
+    [] -> error "Empty queue"
+    a : read' -> (a, check (Queue lenWrite write (lenRead - 1) read'))
+```
+
+
+### Amortization for Banker's Queue
+
+```
+                                                    ┌───┐
+insert 1:       []                                  │ 1 ├───[]
+                                                    └───┘
+                ┌───┐                               ┌───┐
+insert 2:       │ 2 ├───[]                          │ 1 ├───[]
+                └───┘                               └───┘
+                                                    ┌───┐   ╭───────────────────╮
+insert 3:       []                                  │ 1 ├───│ ** reverse [3, 2] │
+                                                    └───┘   ╰───────────────────╯
+                                                    ╭──────────────────╮
+view:           []                                  │ * reverse [3, 2] │
+                                                    ╰──────────────────╯
+                ┌───┐                               ╭──────────────────╮
+insert 4:       │ 4 ├───[]                          │ * reverse [3, 2] │
+                └───┘                               ╰──────────────────╯
+                ┌───┐                               ┌───┐
+view:           │ 4 ├───[]                          │ 3 ├───[]
+                └───┘                               └───┘
+```
+
+#### `insert`:
+
+* Trivial `insert` takes one credit
+* `insert` with `reverse` takes one credit, and creates a thunk with `lenWrite`
+  credits
+
+=> `insert` runs in `O(1)`
+
+#### `view`:
+
+* `view` costs one credit, and we save one credit to pay for the next thunk.
+* Condition for rotating the queue: `lenWrite > lenRead`. => When reaching the
+  thunk of a `reverse` operation, we have saved at least `lenRead` credits to
+  pay for the thunk.
+
+=> `view` runs in amortized `O(1)`
+
+
+### Constant Overhead
+
+The Banker's Queue is slightly slower than the Batched Queue because of the
+additional book-keeping. Hence, in reality the Batched Queue is preferred where
+possible.
+
+Example: `Control.Concurrent.STM.TQueue` from `stm` uses a Batched Queue, since
+the queue is not used persistently, but ephemerally.
+
+
+
+## More Data Structures
+
+-- TODO: Data.Set/Data.Map might be interesting
+
+### Binomial Heap
+
+```haskell
+-- FIXME the spine of the list of trees should be strict, too
+
+data Heap a = Empty | Heap !Int !(Tree a)
+
+data Tree a = Tree !Int a ![Tree a]
+```
+
+
+### Skew Binomial Heap
+
+Used in: `Data.Heap` in Kmett's `heaps`
 
 ### Finger Tree
+
+Used in: `Data.Sequence`
+
+```haskell
+data FingerTree a
+    = Empty
+    | Single a
+    | Deep !Int !(Digit a) (FingerTree (Node a)) !(Digit a)
+
+data Digit a = One a | Two a a | Three a a a | Four a a a a
+
+data Node a = Node2 a a | Node3 a a a
+
+class Sized a where
+    size :: Int
+
+instance Sized a => Sized (FingerTree a) where
+    size Empty          = 0
+    size (Single a)     = size a
+    size (Deep s _ _ _) = s
+
+instance Sized a => Sized (Digit a) where
+    size (One a)        = size a
+    size (Two a b)      = size a + size b
+    size (Three a b c)  = size a + size b + size c
+    size (Four a b c d) = size a + size b + size c + size d
+
+instance Sized a => Sized (Node a) where
+    size (Node2 a b)   = size a + size b
+    size (Node3 a b c) = size a + size b + size c
+
+deep :: Sized a => Digit a -> FingerTree (Node a) -> Digit a -> FingerTree a
+deep l t r = Deep (size l + size t + size r) l t r
+
+cons :: a -> FingerTree a -> FingerTree a
+cons a Empty = Single a
+cons a (Single b) = Tree 2
+```
