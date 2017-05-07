@@ -357,25 +357,119 @@ data Node a = Node2 a a | Node3 a a a
 class Sized a where
     size :: Int
 
-instance Sized a => Sized (FingerTree a) where
-    size Empty          = 0
-    size (Single a)     = size a
-    size (Deep s _ _ _) = s
-
-instance Sized a => Sized (Digit a) where
-    size (One a)        = size a
-    size (Two a b)      = size a + size b
-    size (Three a b c)  = size a + size b + size c
-    size (Four a b c d) = size a + size b + size c + size d
-
-instance Sized a => Sized (Node a) where
-    size (Node2 a b)   = size a + size b
-    size (Node3 a b c) = size a + size b + size c
-
-deep :: Sized a => Digit a -> FingerTree (Node a) -> Digit a -> FingerTree a
-deep l t r = Deep (size l + size t + size r) l t r
-
-cons :: a -> FingerTree a -> FingerTree a
-cons a Empty = Single a
-cons a (Single b) = Tree 2
+instance Sized a => Sized (FingerTree a)
+instance Sized a => Sized (Digit a)
+instance Sized a => Sized (Node a)
 ```
+
+
+### Finger Tree: Visual
+
+```
+FingerTree a                                                          1..8 items
+                                  ┌─┬─┬─┬─┐     ┌─┬─┬─┐
+                                  │a│b│c│d├──┬──┤X│Y│Z│
+                                  └─┴─┴─┴─┘  │  └─┴─┴─┘
+FingerTree (Node a)                          │                       2..24 items
+                  ┌───────┬───────┬───────┐  │  ┌───────┬─────┐
+                  │┌─┬─┬─┐│┌─┬─┬─┐│┌─┬─┬─┐│  │  │┌─┬─┬─┐│┌─┬─┐│
+                  ││e│f│g│││h│i│j│││k│l│m│├──┼──┤│S│T│U│││V│W││
+                  │└─┴─┴─┘│└─┴─┴─┘│└─┴─┴─┘│  │  │└─┴─┴─┘│└─┴─┘│
+                  └───────┴───────┴───────┘  │  └───────┴─────┘
+                                             │
+FingerTree (Node (Node a))                   │                       4..72 items
+      ┌─────────────────────┬─────────────┐  │  ┌─────────────────┐
+      │┌───────┬─────┬─────┐│┌─────┬─────┐│  │  │┌───────┬───────┐│
+      ││┌─┬─┬─┐│┌─┬─┐│┌─┬─┐│││┌─┬─┐│┌─┬─┐││  │  ││┌─┬─┬─┐│┌─┬─┬─┐││
+      │││n│o│p│││q│r│││s│t│││││u│v│││w│x││├──┼──┤││M│N│O│││P│Q│R│││
+      ││└─┴─┴─┘│└─┴─┘│└─┴─┘│││└─┴─┘│└─┴─┘││  │  ││└─┴─┴─┘│└─┴─┴─┘││
+      │└───────┴─────┴─────┘│└─────┴─────┘│  │  │└───────┴───────┘│
+      └─────────────────────┴─────────────┘  │  └─────────────────┘
+                                             │
+FingerTree (Node (Node (Node a)))            │                      8..216 items
+                     ┌───────────────────────┴───────────────────────┐
+                     │┌─────────────┬───────────────┬───────────────┐│
+                     ││┌─────┬─────┐│┌─────┬───────┐│┌─────┬───────┐││
+                     │││┌─┬─┐│┌─┬─┐│││┌─┬─┐│┌─┬─┬─┐│││┌─┬─┐│┌─┬─┬─┐│││
+                     ││││y│z│││A│B│││││C│D│││E│F│G│││││H│I│││J│K│L││││
+                     │││└─┴─┘│└─┴─┘│││└─┴─┘│└─┴─┴─┘│││└─┴─┘│└─┴─┴─┘│││
+                     ││└─────┴─────┘│└─────┴───────┘│└─────┴───────┘││
+                     │└─────────────┴───────────────┴───────────────┘│
+                     └───────────────────────────────────────────────┘
+```
+
+
+### Finger Tree: Inserting an Element
+
+```haskell
+cons :: Sized a => a -> FingerTree a -> FingerTree a
+cons a Empty = Single a
+cons a (Single b) = Deep (One a) Empty (One b)
+cons a (Deep s l t r) = case l of
+    One   b       -> Deep s' (Two   a b)     t                      r
+    Two   b c     -> Deep s' (Three a b c)   t                      r
+    Three b c d   -> Deep s' (Four  a b c d) t                      r
+    Four  b c d e -> t `seq`
+                     Deep s' (Two   a b)     (Node3 c d e `cons` t) r
+  where s' = s + size a
+```
+
+* `cons` tries to pack as tighly as possible (always creates `Node3`)
+* Always keeps two elements on either side, if possible (for fast `view`)
+* `snoc` works exactly the same
+
+`cons` performs in amortized `O(1)`: The »carry« (pushing a `Node` down the
+spine) -- FIXME
+
+
+### Finger Tree: Decomposition
+
+```haskell
+viewL :: Sized a => FingerTree a -> Maybe (a, FingerTree a)
+viewL Empty = Nothing
+viewL (Single a) = Just (a, Empty)
+viewL (Deep s l t r) = Just $ case l of
+    Four  a b c d              -> (a, Deep (s - size a) (Three b c d) t     r)
+    Three a b c                -> (a, Deep (s - size a) (Two   b c)   t     r)
+    Two   a b                  -> (a, Deep (s - size a) (One   b)     t     r)
+    One   a -> case viewL t of
+        Just (Node3 b c d, t') -> (a, Deep (s - size a) (Three b c d) t'    r)
+        Just (Node2 b c,   t') -> (a, Deep (s - size a) (Two   b c)   t'    r)
+        Nothing -> case r of
+            Four  b c d e      -> (a, Deep (s - size a) (Two b c)     Empty (Two d e))
+            Three b c d        -> (a, Deep (s - size a) (Two b c)     Empty (One d))
+            Two   b c          -> (a, Deep (s - size a) (One b)       Empty (One c))
+            One   b            -> (a, Single b)
+```
+
+* If the left side would become empty, recursively fetch a `Node` from the spine.
+* If the spine is empty, try to fetch nodes from the right.
+
+`viewL` performs in amortized `O(1)`: -- FIXME
+
+
+### Finger Tree: Splitting and appending
+
+`split :: Sized a => Int -> FingerTree a -> (FingerTree a, FingerTree a)` uses the
+size annotation to decide which subtree/digit/node to split.
+
+`O(log n)`: -- FIXME
+
+`(><) :: FingerTree a -> FingerTree a -> FingerTree a` creates `Node`s from
+adjacent `Digit`s and pushes them up the spine.
+
+`O(log n)`: -- FIXME
+
+
+### Finger Tree: Applications
+
+* Sequences (`Data.Seq`), Queues: `O(log n)` random access, `O(1)` access to
+  both ends, O(log n) `append`.
+* (Fair) Priority Queues: Replace the Size annotation by a Priority annotation.
+  `O(log n)` insert and access to the minimum element.
+  
+Despite the good asymptotic properties, Finger Trees are quite slow.
+* For Sequences, Lists are generally preferable, unless random access or access
+  to both ends are explicitly required.
+* For Priority Queues, Heaps generally perform much better, but they are usually
+  not stable (fair).
