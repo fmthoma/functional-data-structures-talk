@@ -116,7 +116,7 @@ Worst-case time for insert: `O(n)`
 Amortized  time for insert: `O(1)`!
 
 
-### Array List insertion: Amortized analysis
+### Array List insertion: Amortized Analysis
 
 Account three credits for inserting element `m` into a list of length `N`:
 * One paid directly for actually storing the element
@@ -278,9 +278,9 @@ insert 1:       []                                  │ 1 ├───[]
                 ┌───┐                               ┌───┐
 insert 2:       │ 2 ├───[]                          │ 1 ├───[]
                 └───┘                               └───┘
-                                                    ┌───┐   ╭───────────────────╮
-insert 3:       []                                  │ 1 ├───│ ** reverse [3, 2] │
-                                                    └───┘   ╰───────────────────╯
+                                                    ┌───┐ ╭───────────────────╮
+insert 3:       []                                  │ 1 ├─│ ** reverse [3, 2] │
+                                                    └───┘ ╰───────────────────╯
                                                     ╭──────────────────╮
 view:           []                                  │ * reverse [3, 2] │
                                                     ╰──────────────────╯
@@ -327,13 +327,101 @@ the queue is not used persistently, but ephemerally.
 
 ### Binomial Heap
 
-```haskell
 -- FIXME the spine of the list of trees should be strict, too
 
-data Heap a = Empty | Heap !Int !(Tree a)
+```haskell
+-- | * The 'forest' of a 'Tree' of 'rank' r contains exactly r trees of 'rank' r-1, …, 0
+--   * A 'Tree' of 'rank' n contains exactly 2^n elements
+--   * Elements are in heap order (head is the smallest element)
+data Tree a = Node
+    { rank   :: !Int
+    , root   :: a
+    , forest :: ![Tree a] }
 
-data Tree a = Tree !Int a ![Tree a]
+link :: Ord a => Tree a -> Tree a -> Tree a
+link left right
+    | rank left /= rank right = error "Only link trees of equal rank"
+    | root left <= root right = Node rank' (root left)  (right : forest left)
+    | otherwise               = Node rank' (root right) (left  : forest right)
+  where rank' = rank left + 1
 ```
+
+    ┌───┐
+    │ 1 │
+    └─┬─┘ ┌───┐                         ┌───┐          ┌───┐
+      └───│ 2 ├─────────────────────────│ 6 ├──────────│ 8 ├─[]
+          └─┬─┘ ┌───┐          ┌───┐    └─┬─┘ ┌───┐    └─┬─┘
+            └───│ 3 ├──────────│ 5 ├─[]   └───│ 7 ├─[]   └───[]
+                └─┬─┘ ┌───┐    └─┬─┘          └─┬─┘
+                  └───│ 4 ├─[]   └───[]         └───[]
+                      └─┬─┘
+                        └───[]
+
+          ╰─ rank 2 ──────────────────╯ ╰─ rank 1 ───╯ ╰─ r 0 ─╯
+
+    ╰─ rank 4 ─────────────────────────────────────────────────╯
+
+
+### Binomial Heap: Inserting Elements
+
+```haskell
+newtype Heap a = Heap [Tree a]
+
+insert :: Ord a => a -> Heap a -> Heap a
+insert a (Heap trees) = Heap (insertTree (Node 0 a []) trees)
+  where insertTree s [] = [s]
+        insertTree s (t : ts)
+            | rank s < rank t  -- found a free spot
+                = s : t : ts
+            | otherwise -- must be equal rank (because of sorting) => carry
+                = insertTree (link s t) ts
+```
+
+A binomial Heap is a list of trees of different `rank`, where some positions
+might not be taken.
+
+`insert`ing an element into a Binomial Heap is much like adding 1 to a binary
+number: The 1's correspond to the taken positions, the 0's to open positions.
+
+    10010 + 1 = 10011
+    10011 + 1 = 10100  <- carry twice!
+
+
+### Binomial Heap: Merging Trees
+
+```haskell
+merge :: Ord a => Heap a -> Heap a -> Heap a
+merge (Heap left) (Heap right) = Heap (mergeTrees left right)
+  where mergeTrees left   []    = left
+        mergeTrees []     right = right
+        mergeTrees (l:ls) (r:rs)
+            | rank l > rank r  = l : mergeTrees ls (r:rs)
+            | rank l < rank r  = r : mergeTrees (l:ls) rs
+            | otherwise        = link l r : mergeTrees ls rs
+```
+
+### Binomial Heap: Decomposition
+
+```haskell
+viewMin :: Ord a => Heap a -> Maybe (a, Heap a)
+viewMin (Heap []) = Nothing
+viewMin (Heap trees) = Just (root minTree, Heap rest)
+
+  where (minTree, trees') = findMinTree trees
+        rest = mergeTrees trees' (reverse (forest minTree))
+
+        findMinTree :: Ord a => [Tree a] -> (Tree a, [Tree a])
+        findMinTree [t] = (t, [])
+        findMinTree (t : ts)
+            | root t < root t' = (t, ts)
+            | otherwise        = (t', t:ts')
+          where (t', ts') = findMinTree ts
+```
+
+
+### Binomial Heap: Amortized Analysis
+
+--- FIXME
 
 
 ### Skew Binomial Heap
@@ -473,3 +561,5 @@ Despite the good asymptotic properties, Finger Trees are quite slow.
   to both ends are explicitly required.
 * For Priority Queues, Heaps generally perform much better, but they are usually
   not stable (fair).
+
+### End
