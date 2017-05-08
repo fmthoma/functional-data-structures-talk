@@ -423,8 +423,37 @@ viewMin (Heap trees) = Just (root minTree, Heap rest)
 
 ### Binomial Heap: Amortized Analysis
 
---- FIXME
+#### Strict Binomial Heap:
 
+Idea: Ensure that there is alway one credit on each tree in the heap.
+
+* `insert` costs 2 credits:
+    * one spent directly for inserting the tree
+    * one left at the root
+    * When a carry occurs, two trees are `link`ed, each with one credit at the
+      root. Use one of the credits to pay for linking, the other one is placed
+      at the root of the resulting tree.
+  => amortized `O(1)` insert
+
+* `merge` costs `min(t₁, t₂)` credits, where `tᵢ` is the number of trees in the
+  `i`-th heap:
+    * Merging a tree into an empty spot costs 1 credit
+    * Linking two trees (carry) costs one credit (paid for by taking the credit
+      at the root of one of the trees), and the resulting tree is inserted
+      recursively (at the cost of one credit).
+  => since `tᵢ` is bounded by `2(log₂ nᵢ)`, `merge` runs in `O(log n)`.
+
+* `viewMin` costs at most `3(log₂ n)` credits:
+    * one per tree in the heap for finding the minimum `root` by linearly
+      traversing the trees
+    * one per tree in the `forest` of the min tree for reversing the `forest` of
+      the extracted tree
+    * one per tree in the heap for mering the extracted tree into the heap.
+  => `viewMin` runs in `O(log n)`.
+
+#### Lazy Binomial Heap
+
+-- TODO
 
 ### Skew Binomial Heap
 
