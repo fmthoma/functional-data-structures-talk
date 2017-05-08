@@ -321,13 +321,9 @@ the queue is not used persistently, but ephemerally.
 
 
 
-## More Data Structures
+## Binomial Heaps
 
--- TODO: Data.Set/Data.Map might be interesting
-
-### Binomial Heap
-
--- FIXME the spine of the list of trees should be strict, too
+### Binomial Trees
 
 ```haskell
 -- | * The 'forest' of a 'Tree' of 'rank' r contains exactly r trees of 'rank' r-1, …, 0
@@ -364,19 +360,10 @@ link left right
     ╰─ rank 3 ─────────────────────────────────────────────────╯
 
 
-### Binomial Heap: Inserting Elements
+### Binomial Heaps
 
 ```haskell
 newtype Heap a = Heap [Tree a]
-
-insert :: Ord a => a -> Heap a -> Heap a
-insert a (Heap trees) = Heap (insertTree (Node 0 a []) trees)
-  where insertTree s [] = [s]
-        insertTree s (t : ts)
-            | rank s < rank t  -- found a free spot
-                = s : t : ts
-            | otherwise -- must be equal rank (because of sorting) => carry
-                = insertTree (link s t) ts
 ```
 
 A binomial Heap is a list of trees of different `rank`, where some positions
@@ -388,8 +375,35 @@ number: The 1's correspond to the taken positions, the 0's to open positions.
     10010 + 1 = 10011
     10011 + 1 = 10100  <- carry twice!
 
+For amortization, we maintain that that there is alway one credit on each tree
+in the heap.
 
-### Binomial Heap: Merging Trees
+
+### Binomial Heap: Inserting Elements
+
+```haskell
+insert :: Ord a => a -> Heap a -> Heap a
+insert a (Heap trees) = Heap (insertTree (Node 0 a []) trees)
+  where insertTree s [] = [s]
+        insertTree s (t : ts)
+            | rank s < rank t  -- found a free spot
+                = s : t : ts
+            | otherwise -- must be equal rank (because of sorting) => carry
+                = insertTree (link s t) ts
+```
+
+`insert` costs 2 credits:
+
+* one spent directly for inserting the tree
+* one left at the root
+* When a carry occurs, two trees are `link`ed, each with one credit at the
+  root. Use one of the credits to pay for linking, the other one is placed
+  at the root of the resulting tree.
+
+=> amortized `O(1)` insert
+
+
+### Binomial Heap: Merging Heaps
 
 ```haskell
 merge :: Ord a => Heap a -> Heap a -> Heap a
@@ -401,6 +415,17 @@ merge (Heap left) (Heap right) = Heap (mergeTrees left right)
             | rank l < rank r  = r : mergeTrees (l:ls) rs
             | otherwise        = link l r : mergeTrees ls rs
 ```
+
+`merge` costs `min(t₁, t₂)` credits, where `tᵢ` is the number of trees in the
+`i`-th heap:
+
+* Merging a tree into an empty spot costs 1 credit
+* Linking two trees (carry) costs one credit (paid for by taking the credit
+  at the root of one of the trees), and the resulting tree is inserted
+  recursively (at the cost of one credit).
+
+=> since `tᵢ` is bounded by `2(log₂ nᵢ)`, `merge` runs in `O(log n)`.
+
 
 ### Binomial Heap: Decomposition
 
@@ -420,46 +445,74 @@ viewMin (Heap trees) = Just (root minTree, Heap rest)
           where (t', ts') = findMinTree ts
 ```
 
+`viewMin` costs at most `3(log₂ n)` credits:
 
-### Binomial Heap: Amortized Analysis
+* one per tree in the heap for finding the minimum `root` by linearly
+  traversing the trees
+* one per tree in the `forest` of the min tree for reversing the `forest` of
+  the extracted tree
+* one per tree in the heap for mering the extracted tree into the heap.
 
-#### Strict Binomial Heap:
+=> `viewMin` runs in `O(log n)`.
 
-Idea: Ensure that there is alway one credit on each tree in the heap.
 
-* `insert` costs 2 credits:
-    * one spent directly for inserting the tree
-    * one left at the root
-    * When a carry occurs, two trees are `link`ed, each with one credit at the
-      root. Use one of the credits to pay for linking, the other one is placed
-      at the root of the resulting tree.
-  => amortized `O(1)` insert
+## Skew Binomial Heaps
 
-* `merge` costs `min(t₁, t₂)` credits, where `tᵢ` is the number of trees in the
-  `i`-th heap:
-    * Merging a tree into an empty spot costs 1 credit
-    * Linking two trees (carry) costs one credit (paid for by taking the credit
-      at the root of one of the trees), and the resulting tree is inserted
-      recursively (at the cost of one credit).
-  => since `tᵢ` is bounded by `2(log₂ nᵢ)`, `merge` runs in `O(log n)`.
+Brodal/Okasaki, 1996
 
-* `viewMin` costs at most `3(log₂ n)` credits:
-    * one per tree in the heap for finding the minimum `root` by linearly
-      traversing the trees
-    * one per tree in the `forest` of the min tree for reversing the `forest` of
-      the extracted tree
-    * one per tree in the heap for mering the extracted tree into the heap.
-  => `viewMin` runs in `O(log n)`.
+Used in: `Data.Heap` in Edward Kmett's `heaps`
 
-#### Lazy Binomial Heap
+Problem: Binomial Heap has still amortized bounds. What if we want worst-case
+bounds?
 
--- TODO
+### Skew Binary Numbers
 
-### Skew Binomial Heap
+Skew binary numbers are incremented like binary numbers, but the lowest non-zero
+digit may be incremented to `2`.
 
-Used in: `Data.Heap` in Kmett's `heaps`
+    ┌─────────┬─────────────────────────┬─────────────────────┐
+    │ Decimal │ Ordinary binary numbers │ Skew binary numbers │
+    ╞═════════╪═════════════════════════╪═════════════════════╡
+    │       1 │                       1 │                   1 │
+    │       2 │ 1x carry ->          10 │                   2 │
+    │       3 │                      11 │ 1x carry ->      10 │
+    │       4 │ 2x carry ->         100 │                  11 │
+    │       5 │                     101 │                  12 │
+    │       6 │ 1x carry ->         110 │ 1x carry ->      20 │
+    │       7 │                     111 │ 1x carry ->     100 │
+    │       8 │ 3x carry ->        1000 │                 101 │
+    │       9 │                    1001 │                 102 │
+    │      10 │ 1x carry ->        1010 │ 1x carry ->     110 │
+    │      11 │                    1011 │                 111 │
+    │      12 │ 2x carry ->        1100 │                 112 │
+    │      13 │                    1101 │ 1x carry ->     120 │
+    │      14 │ 1x carry ->        1110 │ 1x carry ->     200 │
+    │      15 │                    1111 │ 1x carry ->    1000 │
+    │      16 │ 4x carry ->       10000 │                1001 │
+    ├─────────┼─────────────────────────┼─────────────────────┤
+    │         │ 15 carries              │ 7 carries           │
+    └─────────┴─────────────────────────┴─────────────────────┘
 
-### Finger Tree
+To reach a number `n`, we need up to `n-1` carries, and each increment
+potentially takes up to `log₂ n` carries.
+
+In Skew binary numbers, each increment takes at most one carry, so to reach a
+number `n`, we need at most `n` carries!
+
+Since inserting into a Binomial Heap coresponds to incrementing the binary
+representation of the number of elements, `insert` into a Skew Binomial Heap
+takes *worst-case* constant time.
+
+
+### Skew Binomial Heap: Implementation
+
+```haskell
+-- FIXME
+```
+
+
+
+## Finger Trees
 
 Used in: `Data.Sequence`
 

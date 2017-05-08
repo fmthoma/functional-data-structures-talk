@@ -7,7 +7,7 @@ import           Prelude hiding (head, tail, (++))
 --
 --    * The 'forest' of a 'Tree' of 'rank' r contains exactly r trees of 'rank' r-1, …, 0
 --    * A 'Tree' of 'rank' n contains exactly 2^n elements
---    * Elements are in heap order (head is the smallest element)
+--    * Elements are in heap order ('root' is the smallest element)
 data Tree a = Node
     { rank   :: !Int
     , root   :: a
