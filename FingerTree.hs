@@ -1,5 +1,6 @@
 module FingerTree where
 
+import           Prelude hiding (lookup)
 
 data FingerTree a
     = Empty
@@ -49,9 +50,9 @@ cons a (Deep s l t r) = case l of
     One   b       -> Deep s' (Two   a b)     t                      r
     Two   b c     -> Deep s' (Three a b c)   t                      r
     Three b c d   -> Deep s' (Four  a b c d) t                      r
-    Four  b c d e -> t `seq` -- Push a node up the spine
-                     -- ^ Amortization: The spine has already been paid for,
-                     --   so we can force it to prevent memory leaks
+    Four  b c d e -> t `seq` -- Push a node down the spine
+                     -- Amortization: The spine has already been paid for,
+                     -- so we can force it to prevent memory leaks
                      Deep s' (Two   a b)     (Node3 c d e `cons` t) r
   where s' = s + size a
 
@@ -90,7 +91,7 @@ viewL (Deep s l t r) = Just $ case l of
     Four  a b c d              -> (a, Deep (s - size a) (Three b c d) t     r)
     Three a b c                -> (a, Deep (s - size a) (Two   b c)   t     r)
     Two   a b                  -> (a, Deep (s - size a) (One   b)     t     r)
-    One   a -> case viewL t of  -- Pull a node down from the spine
+    One   a -> case viewL t of  -- Pull a node up from the spine
         Just (Node3 b c d, t') -> (a, Deep (s - size a) (Three b c d) t'    r)
         Just (Node2 b c,   t') -> (a, Deep (s - size a) (Two   b c)   t'    r)
         Nothing -> case r of    -- If the spine is empty, balance with the right digit
@@ -170,7 +171,6 @@ split pos tree@(Deep s l t r)
   where sl = size l
         slt = sl + size t
 
--- Precondition: pos < size digit
 splitDigit :: Sized a => Int -> Digit a -> (Maybe (Digit a), a, Maybe (Digit a))
 splitDigit _   (One a) = (Nothing, a, Nothing)
 splitDigit pos (Two a b)
@@ -255,9 +255,26 @@ merge4 left (Four  a b c d) (Two   e f)     right = merge (snoc left (Node3 a b 
 merge4 left (Four  a b c d) (Three e f g)   right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node2 f g)   right))
 merge4 left (Four  a b c d) (Four  e f g h) right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node3 f g h) right))
 
+{-|
+>>> fmap getElement (lookup 1 (fromList [1..10]))
+Just 1
+
+>>> fmap getElement (lookup 17 (fromList [1..100]))
+Just 17
+
+>>> fmap getElement (lookup 1 (fromList [1]))
+Just 1
+
+>>> fmap getElement (lookup 1 (fromList []))
+Nothing
+-}
+lookup :: Sized a => Int -> FingerTree a -> Maybe a
+lookup _ Empty      = Nothing
+lookup _ (Single a) = Just a
+lookup pos tree     = let (_, a, _) = split pos tree in Just a
 
 
-data Element a = E a
+data Element a = E { getElement :: a }
 instance Sized (Element a) where size _ = 1
 
 fromList :: [a] -> FingerTree (Element a)

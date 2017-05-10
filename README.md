@@ -607,9 +607,11 @@ viewL (Deep s l t r) = Just $ case l of
     Four  a b c d              -> (a, Deep (s - size a) (Three b c d) t     r)
     Three a b c                -> (a, Deep (s - size a) (Two   b c)   t     r)
     Two   a b                  -> (a, Deep (s - size a) (One   b)     t     r)
-    One   a -> case viewL t of  -- Pull a node down from the spine
+
+    One   a -> case viewL t of  -- Pull a node up from the spine
         Just (Node3 b c d, t') -> (a, Deep (s - size a) (Three b c d) t'    r)
         Just (Node2 b c,   t') -> (a, Deep (s - size a) (Two   b c)   t'    r)
+
         Nothing -> case r of    -- If the spine is empty, balance with the right digit
             Four  b c d e      -> (a, Deep (s - size a) (Two b c)     Empty (Two d e))
             Three b c d        -> (a, Deep (s - size a) (Two b c)     Empty (One d))
@@ -625,9 +627,8 @@ viewL (Deep s l t r) = Just $ case l of
 
 ### Finger Tree: Amortization
 
-* Rewriting a `Digit`/`Node` costs one credit.
-* => Pushing/Pulling to/from the spine costs two extra credits (one for creating
-  the `Node`, one for inserting it into the `Digit`.
+* Rewriting a `Deep` with its (strict) `Digit`s costs one credit.
+* Every access to the spine (push down/pull up) costs one credit.
 
 Access to the spine only happens for `One` and `Four`. Those `Digit`s are called
 *dangerous*, the others are *safe*.
@@ -639,6 +640,9 @@ Note that every access to a dangerous digit makes it safe:
 
 ### Finger Tree: Layaway plan
 
+**Invariant:** Every time a digit becomes dangerous, the debt for the spine
+thunk must be resolved.
+
 #### Pushing a node up the spine:
 
 ```haskell
@@ -648,9 +652,9 @@ cons a (Deep s l t r) = case l of
                      Deep s' (Two a b) (Node3 c d e `cons` t) r
 ```
 
-* Costs one credit for writing the `Two` and
-* creates a thunk that costs two credits.
-* The `Digit` is now safe, so the next operation will not access the spine.
+* Costs one credit for writing the `Two`.
+* Each recursion creates a thunk that will eventually cost one credit.
+* Each recursion turns a dangerous digit into a safe one.
 
 #### Pulling a node from the spine:
 
@@ -663,19 +667,25 @@ viewL (Deep s l t r) = Just $ case l of
     ...
 ```
 
-* Accessing the `Digit` costs one credit, and
-* creates a thunk that costs two credits
-* The `Digit` is now safe, so the next operation will not access the spine.
+* Accessing the `Digit` costs one credit.
+* Each recursion forces a thunk in the spine, which must already be paid for.
+* Each recursion turns a dangerous digit into a safe one.
 
 #### Layaway Plan
 
-Charge two credits per `cons` and `viewL`:
-* If the `Digit` was unsafe, pay one directly for the spine thunk, so that the
-  remaining debt for evaluating the spine is one.
-* If the `Digit` is safe, lay away one credit for the spine thunk, which is now
-  paid for.
+Charge two credits per `cons` and `viewL`: One to rewrite the `Digit`, and one
+to pay the debt of a spine thunk.
+* **Step:** When recursing down the spine, assuming its debt has been paid, we
+  use our extra credit to pay for the spine of the first safe `Digit` we
+  encounter. All the `Digit`s on the way are now safe.
+* **Initial:** When creating a spine, we immediately use the extra credit to
+  resolve its debt.
 
-=> Each time we access the spine, the debt has already been paid.
+=> Spines of dangerous `Digit`s are guaranteed to be paid for, spines of safe
+`Digit`s may have open debt.
+
+=> Each time we access the spine, the debt has already been paid!
+
 
 ### Finger Tree: Splitting and appending
 
@@ -700,6 +710,105 @@ the spine.
 splitting the tree at `i` and returning the minimum element of the right tree.
 
 `O(log n)`: It's just a `split` plus a constant time operation.
+
+#### Implementation
+
+... is not very instructive, mostly just matching on different combinations of
+`Digit`s and `Node`s:
+
+```haskell
+split :: Sized a => Int -> FingerTree a -> (FingerTree a, a, FingerTree a)
+split _ Empty = error "Cannot split an empty tree"
+split pos (Single a) = (Empty, a, Empty)
+split pos tree@(Deep s l t r)
+    | slt < pos = let (rl, a, rr) = splitDigit (pos - slt) r
+                  in  (deepR l t rl, a, maybe Empty digitToTree rr)
+    | sl  < pos = let (tl, n, tr) = split (pos - sl) t
+                      (nl, a, nr) = splitNode (pos - sl - size tl) n
+                  in  (deepR l tl nl, a, deepL nr tr r)
+    | otherwise = let (ll, a, lr) = splitDigit pos l
+                  in  (maybe Empty digitToTree ll, a, deepL lr t r)
+  where sl = size l
+        slt = sl + size t
+
+splitDigit :: Sized a => Int -> Digit a -> (Maybe (Digit a), a, Maybe (Digit a))
+splitDigit _   (One a) = (Nothing, a, Nothing)
+splitDigit pos (Two a b)
+    | size a < pos = (Just (One a), b, Nothing)
+    | otherwise    = (Nothing, a, Just (One b))
+splitDigit pos (Three a b c)
+    | sab < pos = (Just (Two a b), c, Nothing)
+    | sa  < pos = (Just (One a), b, Just (One c))
+    | otherwise = (Nothing, a, Just (Two b c))
+  where sa  = size a
+        sab = sa + size b
+splitDigit pos (Four a b c d)
+    | sabc < pos = (Just (Three a b c), d, Nothing)
+    | sab  < pos = (Just (Two a b), c, Just (One d))
+    | sa   < pos = (Just (One a), b, Just (Two c d))
+    | otherwise  = (Nothing, a, Just (Three b c d))
+  where sa   = size a
+        sab  = sa  + size b
+        sabc = sab + size c
+
+splitNode :: Sized a => Int -> Node a -> (Maybe (Digit a), a, Maybe (Digit a))
+splitNode pos (Node2 a b)
+    | size a < pos = (Just (One a), b, Nothing)
+    | otherwise    = (Nothing, a, Just (One b))
+splitNode pos (Node3 a b c)
+    | sab < pos = (Just (Two a b), c, Nothing)
+    | sa  < pos = (Just (One a), b, Just (One c))
+    | otherwise = (Nothing, a, Just (Two b c))
+  where sa  = size a
+        sab = sa + size b
+
+deepL :: Sized a => Maybe (Digit a) -> FingerTree (Node a) -> Digit a -> FingerTree a
+deepL (Just l) t r = deep l t r
+deepL Nothing  t r = case viewL t of
+    Just (Node3 a b c, t') -> deep (Three a b c) t' r
+    Just (Node2 a b,   t') -> deep (Two   a b)   t' r
+    Nothing                -> digitToTree r
+
+deepR :: Sized a => Digit a -> FingerTree (Node a) -> Maybe (Digit a) -> FingerTree a
+deepR l t (Just r) = deep l t r
+deepR l t Nothing  = case viewR t of
+    Just (t', Node3 x y z) -> deep l t' (Three x y z)
+    Just (t', Node2   y z) -> deep l t' (Two     y z)
+    Nothing                -> digitToTree l
+
+digitToTree :: Sized a => Digit a -> FingerTree a
+digitToTree (One   a)       = Single a
+digitToTree (Two   a b)     = deep (One a)   Empty (One b)
+digitToTree (Three a b c)   = deep (Two a b) Empty (One c)
+digitToTree (Four  a b c d) = deep (Two a b) Empty (Two c d)
+```
+
+```haskell
+merge :: Sized a => FingerTree a -> FingerTree a -> FingerTree a
+merge Empty tree = tree
+merge tree Empty = tree
+merge (Single a) tree = cons a tree
+merge tree (Single z) = snoc tree z
+merge (Deep ls ll lt lr) (Deep rs rl rt rr) = Deep (ls + rs) ll (merge4 lt lr rl rt) rr
+
+merge4 :: Sized a => FingerTree (Node a) -> Digit a -> Digit a -> FingerTree (Node a) -> FingerTree (Node a)
+merge4 left (One   a) (One   b)             right = merge left                      (cons (Node2 a b)         right)
+merge4 left (One   a) (Two   b c)           right = merge left                      (cons (Node3 a b c)       right)
+merge4 left (One   a) (Three b c d)         right = merge (snoc left (Node2 a b))   (cons (Node2     c d)     right)
+merge4 left (One   a) (Four  b c d e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Two   a b) (One   c)           right = merge left                      (cons (Node3 a b c)       right)
+merge4 left (Two   a b) (Two   c d)         right = merge (snoc left (Node2 a b))   (cons (Node2     c d)     right)
+merge4 left (Two   a b) (Three c d e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Two   a b) (Four  c d e f)     right = merge (snoc left (Node3 a b c)) (cons (Node3       d e f) right)
+merge4 left (Three a b c) (One   d)         right = merge (snoc left (Node2 a b))   (cons (Node2     c d)     right)
+merge4 left (Three a b c) (Two   d e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Three a b c) (Three d e f)     right = merge (snoc left (Node3 a b c)) (cons (Node3       d e f) right)
+merge4 left (Three a b c) (Four  d e f g)   right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node2 f g)   right))
+merge4 left (Four  a b c d) (One   e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Four  a b c d) (Two   e f)     right = merge (snoc left (Node3 a b c)) (cons (Node3       d e f) right)
+merge4 left (Four  a b c d) (Three e f g)   right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node2 f g)   right))
+merge4 left (Four  a b c d) (Four  e f g h) right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node3 f g h) right))
+```
 
 
 ### Finger Tree: Applications
