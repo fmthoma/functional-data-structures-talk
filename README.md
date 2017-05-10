@@ -116,7 +116,7 @@ Worst-case time for insert: `O(n)`
 Amortized  time for insert: `O(1)`!
 
 
-### Array List insertion: Amortized Analysis
+# ## Array List insertion: Amortized Analysis
 
 Account three credits for inserting element `m` into a list of length `N`:
 * One paid directly for actually storing the element
@@ -514,6 +514,10 @@ takes *worst-case* constant time.
 
 ## Finger Trees
 
+[Ralf Hinze and Ross Paterson, »Finger trees: a simple general-purpose data
+structure«, Journal of Functional Programming 16:2 (2006).
+](http://www.staff.city.ac.uk/~ross/papers/FingerTree.pdf)
+
 Used in: `Data.Sequence`
 
 ```haskell
@@ -581,7 +585,7 @@ cons a (Deep s l t r) = case l of
     One   b       -> Deep s' (Two   a b)     t                      r
     Two   b c     -> Deep s' (Three a b c)   t                      r
     Three b c d   -> Deep s' (Four  a b c d) t                      r
-    Four  b c d e -> t `seq`
+    Four  b c d e -> t `seq` -- Push a node up the spine
                      Deep s' (Two   a b)     (Node3 c d e `cons` t) r
   where s' = s + size a
 ```
@@ -590,8 +594,7 @@ cons a (Deep s l t r) = case l of
 * Always keeps two elements on either side, if possible (for fast `view`)
 * `snoc` works exactly the same
 
-`cons` performs in amortized `O(1)`: The »carry« (pushing a `Node` down the
-spine) -- FIXME
+`cons` performs in amortized `O(1)`.
 
 
 ### Finger Tree: Decomposition
@@ -604,10 +607,10 @@ viewL (Deep s l t r) = Just $ case l of
     Four  a b c d              -> (a, Deep (s - size a) (Three b c d) t     r)
     Three a b c                -> (a, Deep (s - size a) (Two   b c)   t     r)
     Two   a b                  -> (a, Deep (s - size a) (One   b)     t     r)
-    One   a -> case viewL t of
+    One   a -> case viewL t of  -- Pull a node down from the spine
         Just (Node3 b c d, t') -> (a, Deep (s - size a) (Three b c d) t'    r)
         Just (Node2 b c,   t') -> (a, Deep (s - size a) (Two   b c)   t'    r)
-        Nothing -> case r of
+        Nothing -> case r of    -- If the spine is empty, balance with the right digit
             Four  b c d e      -> (a, Deep (s - size a) (Two b c)     Empty (Two d e))
             Three b c d        -> (a, Deep (s - size a) (Two b c)     Empty (One d))
             Two   b c          -> (a, Deep (s - size a) (One b)       Empty (One c))
@@ -617,26 +620,100 @@ viewL (Deep s l t r) = Just $ case l of
 * If the left side would become empty, recursively fetch a `Node` from the spine.
 * If the spine is empty, try to fetch nodes from the right.
 
-`viewL` performs in amortized `O(1)`: -- FIXME
+`viewL` performs in amortized `O(1)`.
 
+
+### Finger Tree: Amortization
+
+* Rewriting a `Digit`/`Node` costs one credit.
+* => Pushing/Pulling to/from the spine costs two extra credits (one for creating
+  the `Node`, one for inserting it into the `Digit`.
+
+Access to the spine only happens for `One` and `Four`. Those `Digit`s are called
+*dangerous*, the others are *safe*.
+
+Note that every access to a dangerous digit makes it safe:
+* Adding/removing elements: `One` -> `Two`, `Four` -> `Three`
+* Accessing the spine: `One` -> `Three`/`Two`, `Four` -> `Two`
+
+
+### Finger Tree: Layaway plan
+
+#### Pushing a node up the spine:
+
+```haskell
+cons a (Deep s l t r) = case l of
+    ...
+    Four  b c d e -> t `seq` -- Push a node up the spine
+                     Deep s' (Two a b) (Node3 c d e `cons` t) r
+```
+
+* Costs one credit for writing the `Two` and
+* creates a thunk that costs two credits.
+* The `Digit` is now safe, so the next operation will not access the spine.
+
+#### Pulling a node from the spine:
+
+```haskell
+viewL (Deep s l t r) = Just $ case l of
+    ...
+    One a -> case viewL t of  -- Pull a node down from the spine
+        Just (Node3 b c d, t') -> (a, Deep (s - size a) (Three b c d) t' r)
+        Just (Node2 b c,   t') -> (a, Deep (s - size a) (Two   b c)   t' r)
+    ...
+```
+
+* Accessing the `Digit` costs one credit, and
+* creates a thunk that costs two credits
+* The `Digit` is now safe, so the next operation will not access the spine.
+
+#### Layaway Plan
+
+Charge two credits per `cons` and `viewL`:
+* If the `Digit` was unsafe, pay one directly for the spine thunk, so that the
+  remaining debt for evaluating the spine is one.
+* If the `Digit` is safe, lay away one credit for the spine thunk, which is now
+  paid for.
+
+=> Each time we access the spine, the debt has already been paid.
 
 ### Finger Tree: Splitting and appending
+
+#### Splitting
 
 `split :: Sized a => Int -> FingerTree a -> (FingerTree a, FingerTree a)` uses the
 size annotation to decide which subtree/digit/node to split.
 
-`O(log n)`: -- FIXME
+`O(log n)`: On each level, we create two digits and two lazy spines.
 
-`(><) :: FingerTree a -> FingerTree a -> FingerTree a` creates `Node`s from
+#### Merging
+
+`merge :: FingerTree a -> FingerTree a -> FingerTree a` creates `Node`s from
 adjacent `Digit`s and pushes them up the spine.
 
-`O(log n)`: -- FIXME
+`O(log n)`: On each level, we merge two digits, and push at most four nodes up
+the spine.
+
+#### Random Access
+
+`lookup :: Sized a => Int -> FingerTree a -> Maybe a` looks up the `i`-th element by
+splitting the tree at `i` and returning the minimum element of the right tree.
+
+`O(log n)`: It's just a `split` plus a constant time operation.
 
 
 ### Finger Tree: Applications
 
-* Sequences (`Data.Seq`), Queues: `O(log n)` random access, `O(1)` access to
+* Sequences (`Data.Sequence`), Queues: `O(log n)` random access, `O(1)` access to
   both ends, O(log n) `append`.
+
+    ```haskell
+    newtype Seq a = Seq (FingerTree (Element a))
+    newtype Element a = Element a
+    instance Sized (Element a) where
+        size _ = 1
+    ```
+
 * (Fair) Priority Queues: Replace the Size annotation by a Priority annotation.
   `O(log n)` insert and access to the minimum element.
   
@@ -646,4 +723,6 @@ Despite the good asymptotic properties, Finger Trees are quite slow.
 * For Priority Queues, Heaps generally perform much better, but they are usually
   not stable (fair).
 
-### End
+
+
+## End
