@@ -221,6 +221,39 @@ digitToTree (Three a b c)   = deep (Two a b) Empty (One c)
 digitToTree (Four  a b c d) = deep (Two a b) Empty (Two c d)
 
 
+{-|
+>>> toList (merge (fromList [1..10]) (fromList [11..20]))
+[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+
+>>> toList (merge (fromList [1..3]) (fromList [4..20]))
+[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+-}
+merge :: Sized a => FingerTree a -> FingerTree a -> FingerTree a
+merge Empty tree = tree
+merge tree Empty = tree
+merge (Single a) tree = cons a tree
+merge tree (Single z) = snoc tree z
+merge (Deep ls ll lt lr) (Deep rs rl rt rr) = Deep (ls + rs) ll (merge4 lt lr rl rt) rr
+
+merge4 :: Sized a => FingerTree (Node a) -> Digit a -> Digit a -> FingerTree (Node a) -> FingerTree (Node a)
+merge4 left (One   a) (One   b)             right = merge left                      (cons (Node2 a b)         right)
+merge4 left (One   a) (Two   b c)           right = merge left                      (cons (Node3 a b c)       right)
+merge4 left (One   a) (Three b c d)         right = merge (snoc left (Node2 a b))   (cons (Node2     c d)     right)
+merge4 left (One   a) (Four  b c d e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Two   a b) (One   c)           right = merge left                      (cons (Node3 a b c)       right)
+merge4 left (Two   a b) (Two   c d)         right = merge (snoc left (Node2 a b))   (cons (Node2     c d)     right)
+merge4 left (Two   a b) (Three c d e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Two   a b) (Four  c d e f)     right = merge (snoc left (Node3 a b c)) (cons (Node3       d e f) right)
+merge4 left (Three a b c) (One   d)         right = merge (snoc left (Node2 a b))   (cons (Node2     c d)     right)
+merge4 left (Three a b c) (Two   d e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Three a b c) (Three d e f)     right = merge (snoc left (Node3 a b c)) (cons (Node3       d e f) right)
+merge4 left (Three a b c) (Four  d e f g)   right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node2 f g)   right))
+merge4 left (Four  a b c d) (One   e)       right = merge (snoc left (Node3 a b c)) (cons (Node2       d e)   right)
+merge4 left (Four  a b c d) (Two   e f)     right = merge (snoc left (Node3 a b c)) (cons (Node3       d e f) right)
+merge4 left (Four  a b c d) (Three e f g)   right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node2 f g)   right))
+merge4 left (Four  a b c d) (Four  e f g h) right = merge (snoc left (Node3 a b c)) (cons (Node2       d e) (cons (Node3 f g h) right))
+
+
 
 data Element a = E a
 instance Sized (Element a) where size _ = 1
