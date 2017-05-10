@@ -49,7 +49,9 @@ cons a (Deep s l t r) = case l of
     One   b       -> Deep s' (Two   a b)     t                      r
     Two   b c     -> Deep s' (Three a b c)   t                      r
     Three b c d   -> Deep s' (Four  a b c d) t                      r
-    Four  b c d e -> t `seq`
+    Four  b c d e -> t `seq` -- Push a node up the spine
+                     -- ^ Amortization: The spine has already been paid for,
+                     --   so we can force it to prevent memory leaks
                      Deep s' (Two   a b)     (Node3 c d e `cons` t) r
   where s' = s + size a
 
@@ -88,10 +90,10 @@ viewL (Deep s l t r) = Just $ case l of
     Four  a b c d              -> (a, Deep (s - size a) (Three b c d) t     r)
     Three a b c                -> (a, Deep (s - size a) (Two   b c)   t     r)
     Two   a b                  -> (a, Deep (s - size a) (One   b)     t     r)
-    One   a -> case viewL t of
+    One   a -> case viewL t of  -- Pull a node down from the spine
         Just (Node3 b c d, t') -> (a, Deep (s - size a) (Three b c d) t'    r)
         Just (Node2 b c,   t') -> (a, Deep (s - size a) (Two   b c)   t'    r)
-        Nothing -> case r of
+        Nothing -> case r of    -- If the spine is empty, balance with the right digit
             Four  b c d e      -> (a, Deep (s - size a) (Two b c)     Empty (Two d e))
             Three b c d        -> (a, Deep (s - size a) (Two b c)     Empty (One d))
             Two   b c          -> (a, Deep (s - size a) (One b)       Empty (One c))
