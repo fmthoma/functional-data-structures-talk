@@ -1,65 +1,132 @@
 Purely Functional Data Structures
 =================================
 
-## Lazy Evaluation
-
-### Linked Lists
+## Linked Lists
 
 ```haskell
-data List a = Nil | Cons a (List a)
+-- Builtin syntax, but would be defined like that
+data [a]           -- [a] = »List of items of type `a`«
+    = []           -- Pronounced »Nil«: empty list
+    | a : List a   -- Pronounced »Cons«: Prepends an element to a List
 ```
 
-```
-  x  :  []           x  :  y  :  z  :  []
+Syntactical sugar:
 
-┌───┐              ┌───┐ ┌───┐ ┌───┐
-│ x ├───[]         │ x ├─│ y ├─│ z ├───[]
-└───┘              └───┘ └───┘ └───┘
+    [1,2,3] ≡ 1 : 2 : 3 : []
+
+    [1..10] ≡ 1 : 2 : 3 : 4 : 5 : 6 : 7 : 8 : 9 : 10 : []
+
+Pattern Matching (list deconstruction):
+
+```haskell
+(++) :: [a] -> [a] -> [a]
+[]   ++ ys = ys
+x:xs ++ ys = x + (xs ++ ys)
 ```
+
+### Memory Layout
+
+      x  :  []           x  :  y  :  z  :  []
+
+    ┌───┐              ┌───┐ ┌───┐ ┌───┐
+    │ x ├───[]         │ x ├─│ y ├─│ z ├───[]
+    └───┘              └───┘ └───┘ └───┘
+
+Each `Cons` cell contains an element, and a pointer to the next element.
+
+... if the list is evaluated at all, because:
 
 
 ### Lazy Evaluation
 
-```
-repeat a = a : repeat a
+Haskell is lazy:
+* Expressions are only evaluated when the result is needed
+* ... and only as far as needed!
+* To be precise: Evaluation is driven by Pattern Matching.
 
-╭──────────╮
-│ repeat a │
-╰──────────╯
-┌───┐ ╭──────────╮
-│ a ├─│ repeat a │
-└───┘ ╰──────────╯
-┌───┐ ┌───┐ ╭──────────╮
-│ a ├─│ a ├─│ repeat a │
-└───┘ └───┘ ╰──────────╯
+This allows for infinite constructs like repeat:
 
-         ...
+```haskell
+repeat x = x : repeat x
 ```
 
+The function creates a so-called »Thunk«, a reference to a computation to be
+executed:
+
+    ╭──────────╮
+    │ repeat a │
+    ╰──────────╯
+
+After matching on the first `Cons` cell, the memory is updated:
+
+    ┌───┐ ╭──────────╮
+    │ a ├─│ repeat a │
+    └───┘ ╰──────────╯
+
+... and the second `Cons` cell:
+
+    ┌───┐ ┌───┐ ╭──────────╮
+    │ a ├─│ a ├─│ repeat a │
+    └───┘ └───┘ ╰──────────╯
+            ...
+
+
+### Efficiency of Lists
+
+Lists are quite inefficient when compiled naively.
+
+But laziness allows **Stream Fusion**, which basically allows the compiler to
+rearrange and group list operations, so that often a list is never even written
+to memory, but produce and transform elements as they are consumed.
+
+```haskell
+fac :: Int -> Int
+fac n = product [1..n]
+```
+
+Q: How many memory allocations does `fac 100` perform?
+
+A: None at all: The numbers are produced incrementally, as they are consumed by
+`product`. No memory allocation required.
+
+
+## How Lazy can you be?
+
+Assume the Java equivalent of the `head` function:
 
 ```java
 // public static <A> A head(List<A> list) { … }
 
-head(asList(f(1), f(2), f(3)))
+head(asList(f(100), f(200), f(300)))
 ```
 
-Evaluation order:
-1. Evaluate `f(1)`, `f(2)`, `f(3)`
+In what order are the calls evaluated?
+
+1. Evaluate `f(100)`, `f(200)`, `f(300)`
 2. Pass the result to `asList(•,•,•)`, evaluate
 3. Pass the result to `head(•)`, evaluate
+
+
+### Let's Procrastinate!
 
 ```haskell
 head :: [a] -> a
 head (a : as) = a
 
-head [f 1, f 2, f 3]
+head [f 100, f 200, f 300]
 ```
 
-Evaluation order:
-1. Enter head function, pass `[f 1, f 2, f 3]` (`f 1 : f 2 : f 3 : []`) as thunk
+In what order are the calls evaluated?
+
+1. Enter head function, pass `[f 100, f 200, f 300]` as thunk
 2. Encounter pattern `(a : as)`
-3. Evaluate thunk to WHNF (`_ : _`)
-4. Return `f 1` as thunk
+3. Evaluate thunk to Weak Head Normal Form (WHNF: `_ : _`)
+4. Return `f 100` as thunk
+
+We didn't even once call `f`!
+
+(Now think what would happen for `f n = f (n-1) + f(n-2)` ...)
+
 
 
 ## Amortization
@@ -116,7 +183,7 @@ Worst-case time for insert: `O(n)`
 Amortized  time for insert: `O(1)`!
 
 
-# ## Array List insertion: Amortized Analysis
+### Array List insertion: Amortized Analysis
 
 Account three credits for inserting element `m` into a list of length `N`:
 * One paid directly for actually storing the element
