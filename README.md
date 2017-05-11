@@ -151,36 +151,47 @@ already paid for in credits.
 
 #### Physicist's method:
 
---- FIXME
+* Define a potential `Φ` based on a property of each location.
+* The total potential is an upper bound for the accumulated savings, it must
+  never be negative.
+* The amortized cost of an operation is the actual cost plus the change in
+  potential:
+    * Expensive operations can be made cheaper by drawing from the potential,
+    * cheap operations can add to the potential.
+
+The goal is to find a good definition for the potential, so that it will never
+become negative, and so that expensive operations may draw from it.
+
+Both methods are equivalent:
+* Proofs using the Physicist's method are easier to write, because we can ignore
+  the locations of the credits.
+* Proofs using the Banker's method are easier to understand, because we known
+  when and where the credits are placed and consumed.
 
 
 ### Example for amortization: Array Lists
 
 An Array List of fixed size `n` has `O(1)` insert.
 
-```
-                          7
-                          ↓
-┌───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │   │   │
-└───┴───┴───┴───┴───┴───┴───┴───┘
-```
+                              7
+                              ↓
+    ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┘
 
 But if the list is too small, the `n+1`st element takes `O(n)` to insert,
 because the entire list is copied to double the array size.
 
-```
-┌───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │
-└───┴───┴───┴───┴───┴───┴───┴───┘ 9
-  ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓ 
-┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │   │   │   │   │   │   │   │   │
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-```
+    ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │
+    └───┴───┴───┴───┴───┴───┴───┴───┘ 9
+      ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │   │   │   │   │   │   │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
-Worst-case time for insert: `O(n)`
-Amortized  time for insert: `O(1)`!
+* Worst-case time for insert: `O(n)`
+* Amortized  time for insert: `O(1)`!
 
 
 ### Array List insertion: Amortized Analysis
@@ -190,20 +201,18 @@ Account three credits for inserting element `m` into a list of length `N`:
 * One saved for copying it to the next larger array
 * One saved for copying element `m - 2^(N-1)` to the next larger array
 
-```
-┌───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1*│ 2*│ 3 │ 4 │ 5*│ 6*│   │   │
-└───┴───┴───┴───┴───┴───┴───┴───┘
-┌───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1*│ 2*│ 3*│ 4 │ 5*│ 6*│ 7*│   │
-└───┴───┴───┴───┴───┴───┴───┴───┘
-┌───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1*│ 2*│ 3*│ 4*│ 5*│ 6*│ 7*│ 8*│
-└───┴───┴───┴───┴───┴───┴───┴───┘
-┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1*│ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9*│   │   │   │   │   │   │   │
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-```
+    ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1*│ 2*│ 3 │ 4 │ 5*│ 6*│   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┘
+    ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1*│ 2*│ 3*│ 4 │ 5*│ 6*│ 7*│   │
+    └───┴───┴───┴───┴───┴───┴───┴───┘
+    ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1*│ 2*│ 3*│ 4*│ 5*│ 6*│ 7*│ 8*│
+    └───┴───┴───┴───┴───┴───┴───┴───┘
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1*│ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9*│   │   │   │   │   │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 When reaching the size limit, we have exactly one credit per cell to be copied.
 In other words, the resizing operation has already been paid for!
@@ -215,7 +224,7 @@ insert.
 ### Haskell Example: Batched Queue
 
 ```haskell
-data Queue a = Queue ![a] ![a]
+data Queue a = Queue [a] [a]
 
 check :: Queue a -> Queue a
 check (Queue write []) = Queue [] (reverse write)
