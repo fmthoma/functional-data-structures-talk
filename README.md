@@ -197,11 +197,6 @@ because the entire list is copied to double the array size.
 
 ### Array List insertion: Amortized Analysis
 
-Account three credits for inserting element `m` into a list of length `N`:
-* One paid directly for actually storing the element
-* One saved for copying it to the next larger array
-* One saved for copying element `m - 2^(N-1)` to the next larger array
-
     ┌───┬───┬───┬───┬───┬───┬───┬───┐
     │ 1*│ 2*│ 3 │ 4 │ 5*│ 6*│   │   │
     └───┴───┴───┴───┴───┴───┴───┴───┘
@@ -214,6 +209,11 @@ Account three credits for inserting element `m` into a list of length `N`:
     ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
     │ 1*│ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9*│   │   │   │   │   │   │   │
     └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+
+Account three credits for inserting element `m` into a list of length `N`:
+* One paid directly for actually storing the element
+* One saved for copying it to the next larger array
+* One saved for copying element `m - 2^(N-1)` to the next larger array
 
 When reaching the size limit, we have exactly one credit per cell to be copied.
 In other words, the resizing operation has already been paid for!
