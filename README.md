@@ -42,6 +42,7 @@ Each `Cons` cell contains an element, and a pointer to the next element.
 Haskell is lazy:
 * Expressions are only evaluated when the result is needed
 * ... and only as far as needed!
+* Results are *memoized*, i.e. only computed once.
 * To be precise: Evaluation is driven by Pattern Matching.
 
 This allows for infinite constructs like repeat:
@@ -57,7 +58,7 @@ executed:
     │ repeat a │
     ╰──────────╯
 
-After matching on the first `Cons` cell, the memory is updated:
+After matching on the first `Cons` cell, the memory is updated (memoization):
 
     ┌───┐ ╭──────────╮
     │ a ├─│ repeat a │
@@ -251,26 +252,24 @@ Can we do better?
 
 Use the Banker's method:
 
-```
-                                                    ┌───┐
-insert 1:       []                                  │ 1 ├───[]
-                                                    └───┘
-                ┌───┐                               ┌───┐
-insert 2:       │ 2*├───[]                          │ 1 ├───[]
-                └───┘                               └───┘
-                ┌───┐ ┌───┐                         ┌───┐
-insert 3:       │ 3*├─│ 2*├───[]                    │ 1 ├───[]
-                └───┘ └───┘                         └───┘
-                                                    ┌───┐ ┌───┐
-view:           []                                  │ 2 ├─│ 3 ├───[]
-                                                    └───┘ └───┘
-                ┌───┐                               ┌───┐ ┌───┐
-insert 4:       │ 4*├───[]                          │ 2 ├─│ 3 ├───[]
-                └───┘                               └───┘ └───┘
-                ┌───┐                               ┌───┐
-view:           │ 4*├───[]                          │ 3 ├───[]
-                └───┘                               └───┘
-```
+                                                        ┌───┐
+    insert 1:       []                                  │ 1 ├───[]
+                                                        └───┘
+                    ┌───┐                               ┌───┐
+    insert 2:       │ 2*├───[]                          │ 1 ├───[]
+                    └───┘                               └───┘
+                    ┌───┐ ┌───┐                         ┌───┐
+    insert 3:       │ 3*├─│ 2*├───[]                    │ 1 ├───[]
+                    └───┘ └───┘                         └───┘
+                                                        ┌───┐ ┌───┐
+    view:           []                                  │ 2 ├─│ 3 ├───[]
+                                                        └───┘ └───┘
+                    ┌───┐                               ┌───┐ ┌───┐
+    insert 4:       │ 4*├───[]                          │ 2 ├─│ 3 ├───[]
+                    └───┘                               └───┘ └───┘
+                    ┌───┐                               ┌───┐
+    view:           │ 4*├───[]                          │ 3 ├───[]
+                    └───┘                               └───┘
 
 * On `insert`, account one credit to each inserted item, to a total cost of 2.
 * `view` without reversing does not consume any credits, so the total cost is 1.
@@ -291,15 +290,15 @@ our accounting balance:
 peek :: Queue a -> a
 peek q = case view q of (a, _) -> a
             
-test queue = insert (peek queue) queue
+enqueueHead queue = insert (peek queue) queue
 ```
 
 In order to `view` the first element, `peek` potentially reverses the list,
-spending all the saved credits, but immediately throws away the result. Then
-`test` continues with the old queue and inserts the result.
+spending all the saved credits, but immediately throws away the updated queue.
+Then `enqueueHead` continues with the old queue and `insert`s the result.
 
-If anyone `view`s the result of `test`, the queue will be reversed *again* - but
-the credits have already been spent!
+If anyone `view`s the result of `enqueueHead`, the queue will be reversed
+*again* - but the credits have already been spent!
 
 
 ### Laziness and Amortization
@@ -317,7 +316,8 @@ Lazy amortization using the Banker's method is a *layaway plan*:
   to pay for the thunk when it is evaluated.
 
 
-### Example: Banker's Queue
+
+## Banker's Queue
 
 ```haskell
 data Queue a = Queue
@@ -347,26 +347,24 @@ view (Queue {..}) = case read of
 
 ### Amortization for Banker's Queue
 
-```
-                                                    ┌───┐
-insert 1:       []                                  │ 1 ├───[]
-                                                    └───┘
-                ┌───┐                               ┌───┐
-insert 2:       │ 2 ├───[]                          │ 1 ├───[]
-                └───┘                               └───┘
-                                                    ┌───┐ ╭───────────────────╮
-insert 3:       []                                  │ 1 ├─│ ** reverse [3, 2] │
-                                                    └───┘ ╰───────────────────╯
-                                                    ╭──────────────────╮
-view:           []                                  │ * reverse [3, 2] │
-                                                    ╰──────────────────╯
-                ┌───┐                               ╭──────────────────╮
-insert 4:       │ 4 ├───[]                          │ * reverse [3, 2] │
-                └───┘                               ╰──────────────────╯
-                ┌───┐                               ┌───┐
-view:           │ 4 ├───[]                          │ 3 ├───[]
-                └───┘                               └───┘
-```
+                                                        ┌───┐
+    insert 1:       []                                  │ 1 ├───[]
+                                                        └───┘
+                    ┌───┐                               ┌───┐
+    insert 2:       │ 2 ├───[]                          │ 1 ├───[]
+                    └───┘                               └───┘
+                                                        ┌───┐ ╭───────────────────╮
+    insert 3:       []                                  │ 1 ├─│ ** reverse [3, 2] │
+                                                        └───┘ ╰───────────────────╯
+                                                        ╭──────────────────╮
+    view:           []                                  │ * reverse [3, 2] │
+                                                        ╰──────────────────╯
+                    ┌───┐                               ╭──────────────────╮
+    insert 4:       │ 4 ├───[]                          │ * reverse [3, 2] │
+                    └───┘                               ╰──────────────────╯
+                    ┌───┐                               ┌───┐
+    view:           │ 4 ├───[]                          │ 3 ├───[]
+                    └───┘                               └───┘
 
 #### `insert`:
 
