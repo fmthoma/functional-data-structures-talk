@@ -55,19 +55,19 @@ The function creates a so-called »Thunk«, a reference to a computation to be
 executed:
 
     ╭──────────╮
-    │ repeat a │
+    │ repeat x │
     ╰──────────╯
 
 After matching on the first `Cons` cell, the memory is updated (memoization):
 
     ┌───┐ ╭──────────╮
-    │ a ├─│ repeat a │
+    │ x ├─│ repeat x │
     └───┘ ╰──────────╯
 
 ... and the second `Cons` cell:
 
     ┌───┐ ┌───┐ ╭──────────╮
-    │ a ├─│ a ├─│ repeat a │
+    │ x ├─│ x ├─│ repeat x │
     └───┘ └───┘ ╰──────────╯
             ...
 
