@@ -901,9 +901,16 @@ merge4 left (Four  a b c d) (Four  e f g h) right = merge (snoc left (Node3 a b 
 Despite the good asymptotic properties, Finger Trees are quite slow.
 * For Sequences, Lists are generally preferable, unless random access or access
   to both ends are explicitly required.
-* For Priority Queues, Heaps generally perform much better, but they are usually
-  not stable (fair).
+* For Priority Queues, Heaps generally perform better, but they are usually not
+  stable (fair).
 
 
 
-## End
+## Conclusion
+
+* Choose your data structures wisely.
+* Being lazy can save you a lot of work.
+* Smart compilers make stupid programs run fast.
+
+
+## Thank you!
