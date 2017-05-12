@@ -403,27 +403,6 @@ structure«, Journal of Functional Programming 16:2 (2006).
 
 Used in: `Data.Sequence`
 
-```haskell
-data FingerTree a
-    = Empty
-    | Single a
-    | Deep !Int !(Digit a) (FingerTree (Node a)) !(Digit a)
-
-data Digit a = One a | Two a a | Three a a a | Four a a a a
-
-data Node a = Node2 a a | Node3 a a a
-
-class Sized a where
-    size :: Int
-
-instance Sized a => Sized (FingerTree a)
-instance Sized a => Sized (Digit a)
-instance Sized a => Sized (Node a)
-```
-
-
-### Finger Tree: Visual
-
     FingerTree a                                                      1..8 items
                                    ┌─┬─┬─┬───┬───┬─┬─┐
                                    a b c d   │   X Y Z
@@ -444,6 +423,27 @@ instance Sized a => Sized (Node a)
                              ┌──┴──┐     ┌───┴──┐      ┌──┴───┐
                             ┌┴┐   ┌┴┐   ┌┴┐   ┌─┼─┐   ┌┴┐   ┌─┼─┐
                             y z   A B   C D   E F G   H I   J K L
+
+
+### Finger Tree: Data Types
+
+```haskell
+data FingerTree a
+    = Empty
+    | Single a
+    | Deep !Int !(Digit a) (FingerTree (Node a)) !(Digit a)
+
+data Digit a = One a | Two a a | Three a a a | Four a a a a
+
+data Node a = Node2 a a | Node3 a a a
+
+class Sized a where
+    size :: Int
+
+instance Sized a => Sized (FingerTree a)
+instance Sized a => Sized (Digit a)
+instance Sized a => Sized (Node a)
+```
 
 
 ### Finger Tree: Inserting an Element
