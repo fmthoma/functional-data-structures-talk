@@ -78,7 +78,7 @@ Lists are quite inefficient when compiled naively.
 
 But laziness allows **Stream Fusion**, which basically allows the compiler to
 rearrange and group list operations, so that often a list is never even written
-to memory, but produce and transform elements as they are consumed.
+to memory, but produces and transform elements as they are consumed.
 
 ```haskell
 fac :: Int -> Int
@@ -121,7 +121,7 @@ In what order are the calls evaluated?
 
 1. Enter head function, pass `[f 100, f 200, f 300]` as thunk
 2. Encounter pattern `(a : as)`
-3. Evaluate thunk to Weak Head Normal Form (WHNF: `_ : _`)
+3. Evaluate thunk to Weak Head Normal Form (WHNF: `• : •`)
 4. Return `f 100` as thunk
 
 We didn't even once call `f`!
@@ -136,6 +136,31 @@ For algorithms with varying cost per step, worst-case bounds can be too
 pessimistic, and the average case may not be an upper bound.
 
 Goal: Find a better upper bound by balancing between different cost centers.
+
+
+### Example for amortization: Array Lists
+
+An Array List of fixed size `n` has `O(1)` insert.
+
+                              7
+                              ↓
+    ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┘
+
+But if the list is too small, the `n+1`st element takes `O(n)` to insert,
+because the entire list is copied to double the array size.
+
+    ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │
+    └───┴───┴───┴───┴───┴───┴───┴───┘ 9
+      ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │   │   │   │   │   │   │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+
+* Worst-case time for insert: `O(n)`
+* Amortized  time for insert: `O(1)`!
 
 
 ### The banker's and the Physicist's method
@@ -168,31 +193,6 @@ Both methods are equivalent:
   the locations of the credits.
 * Proofs using the Banker's method are easier to understand, because we known
   when and where the credits are placed and consumed.
-
-
-### Example for amortization: Array Lists
-
-An Array List of fixed size `n` has `O(1)` insert.
-
-                              7
-                              ↓
-    ┌───┬───┬───┬───┬───┬───┬───┬───┐
-    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │   │   │
-    └───┴───┴───┴───┴───┴───┴───┴───┘
-
-But if the list is too small, the `n+1`st element takes `O(n)` to insert,
-because the entire list is copied to double the array size.
-
-    ┌───┬───┬───┬───┬───┬───┬───┬───┐
-    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │
-    └───┴───┴───┴───┴───┴───┴───┴───┘ 9
-      ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓   ↓
-    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │   │   │   │   │   │   │   │   │
-    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-
-* Worst-case time for insert: `O(n)`
-* Amortized  time for insert: `O(1)`!
 
 
 ### Array List insertion: Amortized Analysis
