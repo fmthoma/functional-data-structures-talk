@@ -48,28 +48,34 @@ Haskell is lazy:
 This allows for infinite constructs like repeat:
 
 ```haskell
-repeat x = x : repeat x
+replicate 0 x = []
+replicate n x = x : replicate (n - 1) x
 ```
 
 The function creates a so-called »Thunk«, a reference to a computation to be
 executed:
 
-    ╭──────────╮
-    │ repeat x │
-    ╰──────────╯
+    ╭───────────────╮
+    │ replicate 2 x │
+    ╰───────────────╯
 
 After matching on the first `Cons` cell, the memory is updated (memoization):
 
-    ┌───┐ ╭──────────╮
-    │ x ├─│ repeat x │
-    └───┘ ╰──────────╯
+    ┌───┐ ╭───────────────╮
+    │ x ├─│ replicate 1 x │
+    └───┘ ╰───────────────╯
 
 ... and the second `Cons` cell:
 
-    ┌───┐ ┌───┐ ╭──────────╮
-    │ x ├─│ x ├─│ repeat x │
-    └───┘ └───┘ ╰──────────╯
-            ...
+    ┌───┐ ┌───┐ ╭───────────────╮
+    │ x ├─│ x ├─│ replicate 0 x │
+    └───┘ └───┘ ╰───────────────╯
+
+The next pattern-match finds the final `Nil` cell:
+
+    ┌───┐ ┌───┐
+    │ x ├─│ x ├───[]
+    └───┘ └───┘
 
 
 ### Efficiency of Lists
