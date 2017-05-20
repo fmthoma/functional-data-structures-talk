@@ -451,11 +451,13 @@ instance Sized a => Sized (Node a) where
 ```
 
 
-### Finger Tree: Inserting elements
+### Finger Tree: Inserting Elements
 
 ```haskell
-(<|) :: Sized a => a -> FingerTree a -> FingerTree a
-(|>) :: Sized a => FingerTree a -> a -> FingerTree a
+(<|)  -- also called `cons`
+    :: Sized a => a -> FingerTree a -> FingerTree a
+(|>)  -- also called `snoc` (`cons` backwards)
+    :: Sized a => FingerTree a -> a -> FingerTree a
 
 a <| Single b = Deep (One a) Empty (One b)
 a <| Deep s l t r = case l of
@@ -468,12 +470,12 @@ a <| Deep s l t r = case l of
 ```
 
 
-### Building a tree
+### Building a Tree
 
     1 <| 2 <| 3 <| 4 <| 5 <| 6 <| 7 <| 8 <| 9 <| Empty
 
 
-### Building a tree
+### Building a Tree
 
     1 <| 2 <| 3 <| 4 <| 5 <| 6 <| 7 <| 8 <| Single 9
 
@@ -482,7 +484,7 @@ a <| Deep s l t r = case l of
                           9
 
 
-### Building a tree
+### Building a Tree
 
     1 <| 2 <| 3 <| 4 <| 5 <| 6 <| 7 <| Deep (One 8) Empty (One 9)
 
@@ -490,8 +492,10 @@ a <| Deep s l t r = case l of
                       ┌───┴───┐
                       8       9
 
+`Single` is split into a `Deep` tree with `One` on each side and `Empty` spine.
 
-### Building a tree
+
+### Building a Tree
 
     1 <| 2 <| 3 <| 4 <| 5 <| 6 <| Deep (Two 7 8) Empty (One 9)
 
@@ -500,7 +504,7 @@ a <| Deep s l t r = case l of
                     7 8       9
 
 
-### Building a tree
+### Building a Tree
 
     1 <| 2 <| 3 <| 4 <| 5 <| Deep (Three 6 7 8) Empty (One 9)
 
@@ -509,7 +513,7 @@ a <| Deep s l t r = case l of
                   6 7 8       9
 
 
-### Building a tree
+### Building a Tree
 
     1 <| 2 <| 3 <| 4 <| Deep (Four 5 6 7 8) Empty (One 9)
 
@@ -517,8 +521,10 @@ a <| Deep s l t r = case l of
                 ┌─┬─┬─┬───┴───┐
                 5 6 7 8       9
 
+Elements are inserted into the left `Digit` until it reaches `Four`.
 
-### Building a tree
+
+### Building a Tree
 
     1 <| 2 <| 3 <| Deep (Two 4 5) (Single (Node3 6 7 8)) (One 9)
 
@@ -528,8 +534,11 @@ a <| Deep s l t r = case l of
                         ┌─┼─┐
                         6 7 8
 
+When the left `Digit` is full, three elements are pushed down the spine as a
+`Single Node3`, leaving `Two` on the left `Digit`.
 
-### Building a tree
+
+### Building a Tree
 
     1 <| 2 <| Deep (Three 3 4 5) (Single (Node3 6 7 8)) (One 9)
 
@@ -539,8 +548,9 @@ a <| Deep s l t r = case l of
                         ┌─┼─┐
                         6 7 8
 
+Now we can insert two more elements into the left `Digit`.
 
-### Building a tree
+### Building a Tree
 
     1 <| Deep (Four 2 3 4 5) (Single (Node3 6 7 8)) (One 9)
 
@@ -551,7 +561,7 @@ a <| Deep s l t r = case l of
                         6 7 8
 
 
-### Building a tree
+### Building a Tree
 
     Deep (Two 1 2) (Deep (One (Node3 3 4 5)) Empty (One (Node3 6 7 8))) (One 9)
 
@@ -562,21 +572,24 @@ a <| Deep s l t r = case l of
                     ┌─┼─┐   ┌─┼─┐
                     3 4 5   6 7 8
 
+One more `Node3` is pushed down the spine, recursively splitting the `Single`
+into a `Deep` with two `One`s of `Node3`s.
 
-### Building a tree
+
+### Building a Tree
 
 
 * `<|` tries to pack as tighly as possible (always creates `Node3`)
 * Always keeps two elements on either side, if possible (for fast `view`)
 * `|>` works exactly the same
 
-`<|` performs in amortized `O(1)`.
-
 
 ### Finger Tree: Decomposition
 
 ```haskell
 viewL :: Sized a => FingerTree a -> Maybe (a, FingerTree a)
+viewR :: Sized a => FingerTree a -> Maybe (FingerTree a, a)
+
 viewL Empty = Nothing
 viewL (Single a) = Just (a, Empty)
 viewL (Deep s l t r) = Just $ case l of
@@ -595,8 +608,118 @@ viewL (Deep s l t r) = Just $ case l of
             One   b            -> (a, Single b)
 ```
 
-* If the left side would become empty, recursively fetch a `Node` from the spine.
-* If the spine is empty, try to fetch nodes from the right.
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (Two 1 2) (Deep (One (Node3 3 4 5)) Empty (One (Node3 6 7 8))) (Two 9 10)
+
+                          •
+                    ┌─┬───┼───┬─┐
+                    1 2   │   9 10
+                      ┌───┴───┐
+                    ┌─┼─┐   ┌─┼─┐
+                    3 4 5   6 7 8
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (One 2) (Deep (One (Node3 3 4 5)) Empty (One (Node3 6 7 8))) (Two 9 10)
+
+                          •
+                      ┌───┼───┬─┐
+                      2   │   9 10
+                      ┌───┴───┐
+                    ┌─┼─┐   ┌─┼─┐
+                    3 4 5   6 7 8
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (Three 3 4 5) (Single (Node3 6 7 8)) (Two 9 10)
+
+                          •
+                  ┌─┬─┬───┼───┬─┐
+                  3 4 5   │   9 10
+                        ┌─┼─┐
+                        6 7 8
+
+If the left `Digit` would become empty, recursively fetch a `Node` from the spine.
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (Two 4 5) (Single (Node3 6 7 8)) (Two 9 10)
+
+                          •
+                    ┌─┬───┼───┬─┐
+                    4 5   │   9 10
+                        ┌─┼─┐
+                        6 7 8
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (One 5) (Single (Node3 6 7 8)) (Two 9 10)
+
+                          •
+                      ┌───┼───┬─┐
+                      5   │   9 10
+                        ┌─┼─┐
+                        6 7 8
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (Three 6 7 8) Empty (Two 9 10)
+
+                          •
+                  ┌─┬─┬───┴───┬─┐
+                  6 7 8       9 10
+
+Fetch one more `Node` from the sping, leaving the spine `Empty`.
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (Two 7 8) Empty (Two 9 10)
+
+                          •
+                    ┌─┬───┴───┬─┐
+                    7 8       9 10
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (One 8) Empty (Two 9 10)
+
+                          •
+                      ┌───┴───┬─┐
+                      8       9 10
+
+
+### Viewing or Deleting Elements from a Tree
+
+    Deep (One 9) Empty (One 10)
+
+                          •
+                      ┌───┴───┐
+                      9       10
+
+If the spine is empty, try to fetch nodes from the right.
+
+### Viewing or Deleting Elements from a Tree
+
+    Single 10
+
+                          •
+                          │
+                          10
+
+
+### Viewing or Deleting Elements from a Tree
+
+* Never leaves four elements on either side, for fast subsequent `<|`.
+* `viewR` works exactly the same.
 
 `viewL` performs in amortized `O(1)`.
 
