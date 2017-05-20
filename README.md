@@ -451,71 +451,126 @@ instance Sized a => Sized (Node a) where
 ```
 
 
-### Finger Tree: Inserting an Element
+### Finger Tree: Inserting elements
 
 ```haskell
-cons :: Sized a => a -> FingerTree a -> FingerTree a
+(<|) :: Sized a => a -> FingerTree a -> FingerTree a
+(|>) :: Sized a => FingerTree a -> a -> FingerTree a
+
+a <| Single b = Deep (One a) Empty (One b)
+a <| Deep s l t r = case l of
+    One   b       -> Deep s' (Two   a b)     t                  r
+    Two   b c     -> Deep s' (Three a b c)   t                  r
+    Three b c d   -> Deep s' (Four  a b c d) t                  r
+    Four  b c d e -> t `seq` -- Push a node down the spine
+                     Deep s' (Two   a b)     (Node3 c d e <| t) r
+  where s' = s + size a
 ```
 
-```haskell
-cons a Empty = Single a
-```
 
-                      •
-    a  <|  •    ->    |
-                      a
+### Building a tree
 
-*   ```haskell
-    cons a (Single b) = deep (One a) Empty (One b)
-    ```
-                  •              •
-          a  <|   │    ->    ┌───┼───┐
-                  b          a   •   b
+    1 <| 2 <| 3 <| 4 <| 5 <| 6 <| 7 <| 8 <| 9 <| Empty
 
-*   ```haskell
-    cons a (Deep s l t r) = case l of
-        One   b -> Deep (s + size a) (Two   a b) t r
-    ```
 
-                    •                    •
-        a  <|   ┌───┼───…    ->    ┌─┬───┼───…
-                b   │              a b   │
-                    …                    …
+### Building a tree
 
-*   ```haskell
-        Two   b c     -> Deep (s + size a) (Three a b c)   t                      r
-    ```
+    1 <| 2 <| 3 <| 4 <| 5 <| 6 <| 7 <| 8 <| Single 9
 
-                      •                      •
-        a  <|   ┌─┬───┼───…    ->    ┌─┬─┬───┼───…
-                b c   │              a b c   │
-                      …                      …
+                          •
+                          |
+                          9
 
-*   ```haskell
-        Three b c d   -> Deep (s + size a) (Four  a b c d) t                      r
-    ```
 
-                        •                        •
-        a  <|   ┌─┬─┬───┼───…    ->    ┌─┬─┬─┬───┼───…
-                b c d   │              a b c d   │
-                        …                        …
+### Building a tree
 
-*   ```haskell
-        Four  b c d e -> t `seq` -- Push a node up the spine
-                         Deep (s + size a) (Two   a b)     (Node3 c d e `cons` t) r
-    ```
+    1 <| 2 <| 3 <| 4 <| 5 <| 6 <| 7 <| Deep (One 8) Empty (One 9)
 
-                          •                           •
-        a  <|   ┌─┬─┬─┬───┼───…    ─▷    ┌─┬──────────┼───…
-                b c d e   │              a b    ┌─────┼───…
-                          …                   ┌─┼─┐   …
-                                              c d e
+                          •
+                      ┌───┴───┐
+                      8       9
 
-* `cons` tries to pack as tighly as possible (always creates `Node3`)
+
+### Building a tree
+
+    1 <| 2 <| 3 <| 4 <| 5 <| 6 <| Deep (Two 7 8) Empty (One 9)
+
+                          •
+                    ┌─┬───┴───┐
+                    7 8       9
+
+
+### Building a tree
+
+    1 <| 2 <| 3 <| 4 <| 5 <| Deep (Three 6 7 8) Empty (One 9)
+
+                          •
+                  ┌─┬─┬───┴───┐
+                  6 7 8       9
+
+
+### Building a tree
+
+    1 <| 2 <| 3 <| 4 <| Deep (Four 5 6 7 8) Empty (One 9)
+
+                          •
+                ┌─┬─┬─┬───┴───┐
+                5 6 7 8       9
+
+
+### Building a tree
+
+    1 <| 2 <| 3 <| Deep (Two 4 5) (Single (Node3 6 7 8)) (One 9)
+
+                          •
+                    ┌─┬───┼───┐
+                    4 5   │   9
+                        ┌─┼─┐
+                        6 7 8
+
+
+### Building a tree
+
+    1 <| 2 <| Deep (Three 3 4 5) (Single (Node3 6 7 8)) (One 9)
+
+                          •
+                  ┌─┬─┬───┼───┐
+                  3 4 5   │   9
+                        ┌─┼─┐
+                        6 7 8
+
+
+### Building a tree
+
+    1 <| Deep (Four 2 3 4 5) (Single (Node3 6 7 8)) (One 9)
+
+                          •
+                ┌─┬─┬─┬───┼───┐
+                2 3 4 5   │   9
+                        ┌─┼─┐
+                        6 7 8
+
+
+### Building a tree
+
+    Deep (Two 1 2) (Deep (One (Node3 3 4 5)) Empty (One (Node3 6 7 8))) (One 9)
+
+                          •
+                    ┌─┬───┼───┐
+                    1 2   │   9
+                      ┌───┴───┐
+                    ┌─┼─┐   ┌─┼─┐
+                    3 4 5   6 7 8
+
+
+### Building a tree
+
+
+* `<|` tries to pack as tighly as possible (always creates `Node3`)
 * Always keeps two elements on either side, if possible (for fast `view`)
-* `snoc` works exactly the same
+* `|>` works exactly the same
 
-`cons` performs in amortized `O(1)`.
+`<|` performs in amortized `O(1)`.
 
 
 ### Finger Tree: Decomposition
