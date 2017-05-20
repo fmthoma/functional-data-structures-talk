@@ -292,7 +292,7 @@ our accounting balance:
 ```haskell
 peek :: Queue a -> a
 peek q = case view q of (a, _) -> a
-            
+
 enqueueHead queue = insert (peek queue) queue
 ```
 
@@ -406,8 +406,8 @@ structure«, Journal of Functional Programming 16:2 (2006).
 
 Used in: `Data.Sequence`
 
-    FingerTree a                                                      1..8 items
-                                   ┌─┬─┬─┬───┬───┬─┬─┐
+    FingerTree a                             •                        1..8 items
+                                   ┌─┬─┬─┬───┼───┬─┬─┐
                                    a b c d   │   X Y Z
                                              │
     FingerTree (Node a)                      │                       2..24 items
@@ -455,16 +455,61 @@ instance Sized a => Sized (Node a) where
 
 ```haskell
 cons :: Sized a => a -> FingerTree a -> FingerTree a
-cons a Empty = Single a
-cons a (Single b) = Deep (One a) Empty (One b)
-cons a (Deep s l t r) = case l of
-    One   b       -> Deep s' (Two   a b)     t                      r
-    Two   b c     -> Deep s' (Three a b c)   t                      r
-    Three b c d   -> Deep s' (Four  a b c d) t                      r
-    Four  b c d e -> t `seq` -- Push a node up the spine
-                     Deep s' (Two   a b)     (Node3 c d e `cons` t) r
-  where s' = s + size a
 ```
+
+```haskell
+cons a Empty = Single a
+```
+
+                      •
+    a  <|  •    ->    |
+                      a
+
+*   ```haskell
+    cons a (Single b) = deep (One a) Empty (One b)
+    ```
+                  •              •
+          a  <|   │    ->    ┌───┼───┐
+                  b          a   •   b
+
+*   ```haskell
+    cons a (Deep s l t r) = case l of
+        One   b -> Deep (s + size a) (Two   a b) t r
+    ```
+
+                    •                    •
+        a  <|   ┌───┼───…    ->    ┌─┬───┼───…
+                b   │              a b   │
+                    …                    …
+
+*   ```haskell
+        Two   b c     -> Deep (s + size a) (Three a b c)   t                      r
+    ```
+
+                      •                      •
+        a  <|   ┌─┬───┼───…    ->    ┌─┬─┬───┼───…
+                b c   │              a b c   │
+                      …                      …
+
+*   ```haskell
+        Three b c d   -> Deep (s + size a) (Four  a b c d) t                      r
+    ```
+
+                        •                        •
+        a  <|   ┌─┬─┬───┼───…    ->    ┌─┬─┬─┬───┼───…
+                b c d   │              a b c d   │
+                        …                        …
+
+*   ```haskell
+        Four  b c d e -> t `seq` -- Push a node up the spine
+                         Deep (s + size a) (Two   a b)     (Node3 c d e `cons` t) r
+    ```
+
+                          •                           •
+        a  <|   ┌─┬─┬─┬───┼───…    ─▷    ┌─┬──────────┼───…
+                b c d e   │              a b    ┌─────┼───…
+                          …                   ┌─┼─┐   …
+                                              c d e
 
 * `cons` tries to pack as tighly as possible (always creates `Node3`)
 * Always keeps two elements on either side, if possible (for fast `view`)
@@ -701,7 +746,7 @@ merge4 left (Four  a b c d) (Four  e f g h) right = merge (snoc left (Node3 a b 
 
 * (Fair) Priority Queues: Replace the Size annotation by a Priority annotation.
   `O(log n)` insert and access to the minimum element.
-  
+
 Despite the good asymptotic properties, Finger Trees are quite slow.
 * For Sequences, Lists are generally preferable, unless random access or access
   to both ends are explicitly required.
