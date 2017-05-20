@@ -806,11 +806,47 @@ right tree.
 * (Fair) Priority Queues: Replace the Size annotation by a Priority annotation.
   `O(log n)` insert and access to the minimum element.
 
-Despite the good asymptotic properties, Finger Trees are quite slow.
-* For Sequences, Lists are generally preferable, unless random access or access
-  to both ends are explicitly required.
-* For Priority Queues, Heaps generally perform better, but they are usually not
-  stable (fair).
+
+## Other Widely-Used Functional Data Structures
+
+### Size-Balanced Binary Trees
+
+Used in `Data.Set` and `Data.Map` in `containers`.
+
+* `Map`s (`Set`s) use the `Ord` instance of the keys (elements) to maintain
+  ordering for `O(log n)` worst-case insert and lookup.
+* To prevent degeneration to `O(n)` in pathological cases, two subtrees are
+  rebalanced if their sizes differ by a factor greater than 3.
+
+```haskell
+data Map k v
+    = Bin { size  :: !Int
+          , key   :: !k
+          , root  :: v
+          , left  :: !(Map k v)
+          , right :: !(Map k v) }
+    | Tip
+```
+
+### Skew Binomial Heaps
+
+Used in `Data.Heap` in Edward Kmett's `heaps`.
+
+* A variant of Binomaial Heaps with worst-case instead of amortized bounds.
+* Used as Priority Queues
+* Same asymptotic bounds as Finger Trees, slightly faster, but not stable (fair).
+
+```haskell
+data Heap a
+    = Empty
+    | Tree { rank :: !Int
+           , root :: a
+           , forest :: [Heap a]
+           -- ^ Zero or one tree of each rank smaller than this tree's rank,
+           -- ordered by increasing rank. First two trees may have the same rank,
+           -- to limit number of carries per operation.
+           }
+```
 
 
 
