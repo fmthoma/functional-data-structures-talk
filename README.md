@@ -12,7 +12,7 @@ data [a]           -- [a] = »List of items of type `a`«
 
 Syntactical sugar:
 
-    [1,2,3] ≡ 1 : 2 : 3 : []
+    [1,2,3] ≡ 1 : (2 : (3 : []))
 
     [1..10] ≡ 1 : 2 : 3 : 4 : 5 : 6 : 7 : 8 : 9 : 10 : []
 
@@ -21,7 +21,7 @@ Pattern Matching (list deconstruction):
 ```haskell
 (++) :: [a] -> [a] -> [a]
 []   ++ ys = ys
-x:xs ++ ys = x + (xs ++ ys)
+x:xs ++ ys = x : (xs ++ ys)
 ```
 
 ### Memory Layout
@@ -205,7 +205,10 @@ Both methods are equivalent:
     └───┴───┴───┴───┴───┴───┴───┴───┘
     ┌───┬───┬───┬───┬───┬───┬───┬───┐
     │ 1*│ 2*│ 3*│ 4*│ 5*│ 6*│ 7*│ 8*│
-    └───┴───┴───┴───┴───┴───┴───┴───┘
+    └───┴───┴───┴───┴───┴───┴───┴───┘ 9
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │   │   │   │   │   │   │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
     ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
     │ 1*│ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9*│   │   │   │   │   │   │   │
     └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
@@ -442,7 +445,9 @@ class Sized a where
 
 instance Sized a => Sized (FingerTree a)
 instance Sized a => Sized (Digit a)
-instance Sized a => Sized (Node a)
+instance Sized a => Sized (Node a) where
+    size (Node2 a b) = size a + size b
+    size (Node3 a b c) = size a + size b + size c
 ```
 
 
@@ -514,7 +519,7 @@ Note that every access to a dangerous digit makes it safe:
 **Invariant:** Every time a digit becomes dangerous, the debt for the spine
 thunk must be resolved.
 
-#### Pushing a node up the spine:
+#### Pushing a node down the spine:
 
 ```haskell
 cons a (Deep s l t r) = case l of
