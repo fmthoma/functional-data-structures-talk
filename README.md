@@ -19,10 +19,11 @@ Syntactical sugar:
 Pattern Matching (list deconstruction):
 
 ```haskell
-(++) :: [a] -> [a] -> [a]
-[]   ++ ys = ys
-x:xs ++ ys = x : (xs ++ ys)
+case list of
+    []     -> ...
+    x : xs -> ...
 ```
+
 
 ### Memory Layout
 
@@ -451,18 +452,16 @@ class Sized a where
 
 instance Sized a => Sized (FingerTree a)
 instance Sized a => Sized (Digit a)
-instance Sized a => Sized (Node a) where
-    size (Node2 a b) = size a + size b
-    size (Node3 a b c) = size a + size b + size c
+instance Sized a => Sized (Node a)
 ```
 
 
 ### Finger Tree: Inserting Elements
 
 ```haskell
-(<|)  -- also called `cons`
+(<|)  -- `cons`
     :: Sized a => a -> FingerTree a -> FingerTree a
-(|>)  -- also called `snoc` (`cons` backwards)
+(|>)  -- `snoc` (`cons` backwards)
     :: Sized a => FingerTree a -> a -> FingerTree a
 
 a <| Single b = Deep (One a) Empty (One b)
@@ -597,7 +596,9 @@ viewL :: Sized a => FingerTree a -> Maybe (a, FingerTree a)
 viewR :: Sized a => FingerTree a -> Maybe (FingerTree a, a)
 
 viewL Empty = Nothing
+
 viewL (Single a) = Just (a, Empty)
+
 viewL (Deep s l t r) = Just $ case l of
     Four  a b c d              -> (a, Deep (s - size a) (Three b c d) t     r)
     Three a b c                -> (a, Deep (s - size a) (Two   b c)   t     r)
@@ -810,7 +811,7 @@ right tree.
   both ends, O(log n) `append`.
 
 * (Fair) Priority Queues: Replace the Size annotation by a Priority annotation.
-  `O(log n)` insert and access to the minimum element.
+  `O(1)` insert and `O(log n)` access to the minimum element.
 
 
 ## Other Widely-Used Functional Data Structures
