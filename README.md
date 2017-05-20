@@ -776,8 +776,8 @@ Inductive proof:
 
 #### Splitting
 
-`split :: Sized a => Int -> FingerTree a -> (FingerTree a, FingerTree a)` uses the
-size annotation to decide which subtree/digit/node to split.
+`split :: Sized a => Int -> FingerTree a -> (FingerTree a, FingerTree a)` uses
+the size annotation to decide which subtree/digit/node to split.
 
 `O(log n)`: On each level, we create two digits and two lazy spines.
 
@@ -791,8 +791,9 @@ the spine.
 
 #### Random Access
 
-`lookup :: Sized a => Int -> FingerTree a -> Maybe a` looks up the `i`-th element by
-splitting the tree at `i` and returning the minimum element of the right tree.
+`lookup :: Sized a => Int -> FingerTree a -> Maybe a` looks up the `i`-th
+element by splitting the tree at `i` and returning the minimum element of the
+right tree.
 
 `O(log n)`: It's just a `split` plus a constant time operation.
 
